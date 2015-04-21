@@ -10,7 +10,7 @@ class MonoTest extends FreeSpec with Matchers with Checkers {
   import Scalaz._
   import Mono._
 
-  "Mono example should" - {
+  "Mono example should be able to" - {
     def incr: BigInt => BigInt = _ + 1
     def decr: BigInt => BigInt = _ - 1
 
@@ -18,17 +18,28 @@ class MonoTest extends FreeSpec with Matchers with Checkers {
       x <- ask
     } yield incr(x)
 
-    "be able obtain dynamic value from environment" in {
+    "obtain dynamic value from environment" in {
       check { (n: BigInt) =>
         runReader(computation)(n) == incr(n)
       }
     }
 
-    "be able to alter dynamic value in environment" in {
+    "alter dynamic value in environment" in {
       check { (n: BigInt) =>
         incr(decr(n)) == decr(incr(n))
         incr(decr(n)) == n
         runReader(local(decr)(computation))(n) == n
+      }
+    }
+
+    "NOT obtain multiple dynamic values in environment" in {
+      def computation: Eff[BigInt] = for {
+        x <- ask
+        y <- ask
+      } yield (x + y)
+
+      check { (n: BigInt) =>
+        runReader(computation)(n) == n + n
       }
     }
   }
