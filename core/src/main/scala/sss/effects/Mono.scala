@@ -6,7 +6,7 @@ object Mono {
 
   sealed trait VE[w]
   case class Val[w](x: w) extends VE[w]
-  case class E[w](k: Int => VE[w]) extends VE[w]
+  case class E[w](k: BigInt => VE[w]) extends VE[w]
 
   trait Eff[a] {
     def runEff[w]: (a => VE[w]) => VE[w]
@@ -21,13 +21,13 @@ object Mono {
     }
   }
 
-  def ask = new Eff[Int] {
+  def ask = new Eff[BigInt] {
     def runEff[w] = k => E(k)
   }
 
   def admin[w]: Eff[w] => VE[w] = x => x.runEff(Val.apply)
 
-  def runReader[w]: Eff[w] => Int => w = m => e => {
+  def runReader[w]: Eff[w] => BigInt => w = m => e => {
     def loop: VE[w] => w = y => y match {
       case Val(x) => x
       case E(k)   => loop(k(e))
@@ -35,7 +35,7 @@ object Mono {
     loop(admin(m))
   }
 
-  def local[w]: (Int => Int) => Eff[w] => Eff[w] = f => m => {
+  def local[w]: (BigInt => BigInt) => Eff[w] => Eff[w] = f => m => {
     ask >>= (e0 => {
       val e = f(e0)
       def loop: (VE[w] => Eff[w]) = y => y match {

@@ -11,21 +11,21 @@ class MonoTest extends FreeSpec with Matchers with Checkers {
   import Mono._
 
   "Mono example should" - {
-    def incr: Int => Int = _ + 1
-    def decr: Int => Int = _ - 1
+    def incr: BigInt => BigInt = _ + 1
+    def decr: BigInt => BigInt = _ - 1
 
-    def computation: Eff[Int] = for {
+    def computation: Eff[BigInt] = for {
       x <- ask
     } yield incr(x)
 
     "be able obtain dynamic value from environment" in {
-      check { (n: Int) =>
+      check { (n: BigInt) =>
         runReader(computation)(n) == incr(n)
       }
     }
 
     "be able to alter dynamic value in environment" in {
-      check { (n: Int) =>
+      check { (n: BigInt) =>
         incr(decr(n)) == decr(incr(n))
         incr(decr(n)) == n
         runReader(local(decr)(computation))(n) == n
