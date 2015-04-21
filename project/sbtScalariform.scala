@@ -7,6 +7,9 @@ object sbtScalariform {
   private def configureScalariform(pref: IFormattingPreferences): IFormattingPreferences = {
     pref
       .setPreference(AlignParameters, true)
+      .setPreference(PreserveDanglingCloseParenthesis, true)
+      .setPreference(AlignSingleLineCaseStatements, true)
+      .setPreference(CompactControlReadability, true)
   }
 
 
