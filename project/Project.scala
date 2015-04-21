@@ -21,8 +21,9 @@ object ScalableEffectsBuild extends Build {
 
   lazy val commonDeps = Seq(
     "org.scalaz" %% "scalaz-core" % "7.0.6"
-    , "com.chuusai" %% "shapeless" % "2.0.0"
+    , "com.chuusai" %% "shapeless" % "2.2.0-RC4"
     , "org.scalatest" %% "scalatest" % "2.1.6" % "test,it"
+    , "org.scalacheck" %% "scalacheck" % "1.12.2" % "test,it"
   )
 
   lazy val defaultSettings = Defaults.itSettings ++
