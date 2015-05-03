@@ -12,7 +12,28 @@ object Mono {
     def runEff[w]: (a => ValueEffect[w]) => ValueEffect[w]
   }
 
-  implicit val monadEffInstance = new Monad[Eff] {
+  // {{{ archive
+
+  object archive {
+    implicit val functorEffInstance = new Functor[Eff] {
+      def map[A, B](fa: Eff[A])(f: A => B): Eff[B] = new Eff[B] {
+        def runEff[w] = g => fa.runEff[w](a => g(f(a)))
+      }
+    }
+    def joinEff[a]: Eff[Eff[a]] => Eff[a] = (ffa: Eff[Eff[a]]) => new Eff[a] {
+      def runEff[w] = (ga: a => ValueEffect[w]) => {
+        def foo: Eff[a] => ValueEffect[w] = ((gfa: Eff[a]) => gfa.runEff(ga))
+        def bar: (Eff[a] => ValueEffect[w]) => ValueEffect[w] = ffa.runEff[w]
+        bar(foo)
+
+      }
+    }
+    def joinEff2[a]: Eff[Eff[a]] => Eff[a] = ffa => ffa >>= identity
+  }
+
+  // }}}
+
+  implicit def monadEffInstance: Monad[Eff] = new Monad[Eff] {
     def point[A](x: => A): Eff[A] = new Eff[A] {
       def runEff[w] = k => k(x)
     }
