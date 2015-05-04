@@ -31,71 +31,42 @@ object Poly {
 
   // {{{ Eff
 
-  trait Eff[r[_], a] { self =>
-    def runEff[w]: (a => ValueEffect[w, r]) => ValueEffect[w, r]
-
-    // FIXME:
-    // the below are needed to help scala's inference engine. essentially the
-    // scalaz implicits wihch are based off generic monad M[_]'s don't seem to
-    // be sufficient when M[_] =:=  Eff[r, ?]
-    // [x] it doesn't seem to be due to kind projector (see monadEffInstance2)
-    implicit def M = implicitly[Monad[Eff[r, ?]]]
-    // the >>= below is needed for using the operator with Eff
-    // the fact this is needed implies that the implicit for
-    // BindOps[Eff[r, ?], a] in scalaz.syntax.Syntaxes.monad isn't firing.
-    // [ ] what if we were to specialize it?
-    def >>=[b]: (a => Eff[r, b]) => Eff[r, b] = M.bind(self)
-    // 'map' below is needed to enable for comprehensions
-    def map[B]: (a => B) => Eff[r, B] = M.map(self)
+  case class Eff[r[_]]() {
+    // TODO: is `0` needed?
+    trait `0`[r0[_], a] {
+      def get: r0[_] =:= r[_]
+    }
+    trait t0[a] extends `0`[r, a] {
+      def get = implicitly
+      def runEff[w]: (a => ValueEffect[w, r]) => ValueEffect[w, r]
+    }
+    type RunEff[a] = ∀[λ[w => ((a => ValueEffect[w, r]) => ValueEffect[w, r])]]
+    def apply[a]: RunEff[a] => t0[a] = f => new t0[a] {
+      def runEff[w] = f.apply[w]
+    }
   }
-
-  // {{{ archive: fix BindOps implicits
-
-  // import syntax.BindOps
-  // implicit def monadEffBindOps[r[_], a]: BindOps[Eff[r, ?], a] = new BindOps[Eff[r, ?], a] {
-  //   def F: Bind[Eff[r, ?]] = implicitly
-  //   def self: Eff[r, a] = ???
-  // }
-  // def unapplyEff[TC[_[_]], R[_], A0](implicit TC0: TC[Eff[R, ?]]): Unapply[TC, Eff[R, A0]] {
-  //   type M[X] = Eff[R, X]
-  //   type A = A0
-  // } = new Unapply[TC, Eff[R, A0]] {
-  //   type M[X] = Eff[R, X]
-  //   type A = A0
-  //   def TC = TC0
-  //   def leibniz = Leibniz.refl
-  // }
-  // implicit def unapplyEffBind[R[_], A0](implicit TC0: Bind[Eff[R, ?]]): Unapply[Bind, Eff[R, A0]] {
-  //   type M[X] = Eff[R, X]
-  //   type A = A0
-  // } = unapplyEff[Bind, R, A0](monadEffInstance)
-  // object Eff {
-  //   trait t0[r[_]] {
-  //     type t1[x] = Eff[r, x]
-  //   }
-  // }
-
-  // }}}
 
   // {{{ Functor instance
 
-  implicit def functorEffInstance[r[_]]: Functor[Eff[r, ?]] = new Functor[Eff[r, ?]] {
-    def map[A, B](fa: Eff[r, A])(f: A => B): Eff[r, B] = new Eff[r, B] {
-      def runEff[w] = g => fa.runEff[w](a => g(f(a)))
-    }
+  // FIXME: turning the below into an implicit breaks things
+  def functorEffInstance[r[_]]: Functor[Eff[r]#t0] = new Functor[Eff[r]#t0] {
+    def map[A, B](fa: Eff[r]#t0[A])(f: A => B): Eff[r]#t0[B] =
+      Eff[r]()[B](new Eff[r]#RunEff[B] {
+        def apply[w] = g => fa.runEff[w](a => g(f(a)))
+      })
   }
 
   // }}}
   // {{{ Monad instance
 
-  // implicit def monadEffInstance2[r[_]]: Monad[Eff.t0[r]#t1] = new Monad[Eff.t0[r]#t1] {
-  implicit def monadEffInstance[r[_]]: Monad[Eff[r, ?]] = new Monad[Eff[r, ?]] {
-    def point[A](a: => A): Eff[r, A] = new Eff[r, A] {
-      def runEff[w] = k => k(a)
-    }
-    def bind[A, B](fa: Eff[r, A])(f: A => Eff[r, B]): Eff[r, B] = new Eff[r, B] {
-      def runEff[w] = k => fa.runEff(v => f(v).runEff(k))
-    }
+  implicit def monadEffInstance[r[_]]: Monad[Eff[r]#t0] = new Monad[Eff[r]#t0] {
+    def point[A](a: => A): Eff[r]#t0[A] = Eff[r]()[A](new Eff[r]#RunEff[A] {
+      def apply[w] = k => k(a)
+    })
+    def bind[A, B](fa: Eff[r]#t0[A])(f: A => Eff[r]#t0[B]): Eff[r]#t0[B] =
+      Eff[r]()[B](new Eff[r]#RunEff[B] {
+        def apply[w] = k => fa.runEff(v => f(v).runEff(k))
+      })
   }
 
   // }}}
@@ -104,53 +75,33 @@ object Poly {
 
   // {{{ Eff: send, admin, run
 
-  def send[r[_], a]: ∀[λ[w => ((a => ValueEffect[w, r]) => r[ValueEffect[w, r]])]] => Eff[r, a] =
-    f => new Eff[r, a] {
-      def runEff[w] = (k: (a => ValueEffect[w, r])) => Effect(f.apply(k))
-    }
+  def send[r[_], a]: ∀[λ[w => ((a => ValueEffect[w, r]) => r[ValueEffect[w, r]])]] => Eff[r]#t0[a] =
+    f => Eff[r]()[a](new Eff[r]#RunEff[a] {
+      def apply[w] = (k: (a => ValueEffect[w, r])) => Effect(f.apply(k))
+    })
 
-  def admin[r[_], w]: Eff[r, w] => ValueEffect[w, r] = eff => eff.runEff(Value.apply)
+  def admin[r[_], w]: Eff[r]#t0[w] => ValueEffect[w, r] = eff => eff.runEff(Value.apply)
 
   sealed trait Void[v]
   case class ImpossibleHappened(x: String) extends Exception(x)
 
-  def run[w]: Eff[Void, w] => w = m => admin(m) match {
+  def run[w]: Eff[Void]#t0[w] => w = m => admin(m) match {
     case Value(x) => x
     case Effect(_) => throw ImpossibleHappened("""Eff[Void, ?] seems to be
-    encoding an Effect""")
+                                               encoding an Effect""")
   }
 
   // }}}
 
   object Reader {
 
-    // {{{ archive: unapplyEffReader
-
-    // [error]
-    // /home/shergill/virtualEnvs/extensible-effects/scalable-effects/core/src/test/scala/effects/PolyTest.scala:30:
-    // Implicit not found:
-
-    def unapplyEffReader[TC[_[_]], A0, B0](implicit TC0: TC[Eff[Reader[B0]#τ, ?]]): Unapply[TC, Eff[Reader[B0]#τ, A0]] {
-      type M[X] = Eff[Reader[B0]#τ, X]
-      type A = A0
-    } = ???
-
-    // scalaz.Unapply[scalaz.Bind, sss.effects.Poly.Eff[sss.effects.Poly.Reader.Reader[e]#τ,e]].
-    // Unable to unapply type `sss.effects.Poly.Eff[sss.effects.Poly.Reader.Reader[e]#τ,e]` into a type constructor of kind `M[_]` that is classified by the type class `scalaz.Bind`. Check that the type class is defined by compiling `implicitly[scalaz.Bind[type constructor]]` and review the implicits in object Unapply, which only cover common type 'shapes.'
-
-    // }}}
-
-    def ask[e]: Eff[Reader[e]#τ, e] = send[Reader[e]#τ, e](new ∀[λ[w => ((e => ValueEffect[w, Reader[e]#τ]) => Reader[e]#τ[ValueEffect[w, Reader[e]#τ]])]] {
-      def apply[w] = Reader[e].τ.apply
-    })
-
     case class Reader[e]() {
-      trait Inner[i, o] { def get: i =:= e }
-      case class τ[o](x: e => o) extends Inner[e, o] {
+      // TODO: is `0` needed?
+      trait `0`[i, o] { def get: i =:= e }
+      case class t0[o](x: e => o) extends `0`[e, o] {
         def get = implicitly
       }
     }
-
     // {{{ archive: old Reader. see sss.workarounds.TypeConstructorInference
 
     // sealed trait Reader[e, v]
@@ -168,22 +119,26 @@ object Poly {
 
     // }}}
 
-    def runReader[w, e]: Eff[Reader[e]#τ, w] => e => Eff[Void, w] =
+    def ask[e]: Eff[Reader[e]#t0]#t0[e] = send[Reader[e]#t0, e](new ∀[λ[w => ((e => ValueEffect[w, Reader[e]#t0]) => Reader[e]#t0[ValueEffect[w, Reader[e]#t0]])]] {
+      def apply[w] = Reader[e].t0.apply
+    })
+
+    def runReader[w, e]: Eff[Reader[e]#t0]#t0[w] => e => Eff[Void]#t0[w] =
       reader => env_init => {
-        def loop: ValueEffect[w, Reader[e]#τ] => Eff[Void, w] = ve => ve match {
-          case Value(x)  => Monad[Eff[Void, ?]].pure(x)
+        def loop: ValueEffect[w, Reader[e]#t0] => Eff[Void]#t0[w] = ve => ve match {
+          case Value(x)  => Monad[Eff[Void]#t0].pure(x)
           case Effect(k) => loop(k.x(env_init))
         }
         loop(admin(reader))
       }
 
-    def local[w, e]: (e => e) => Eff[Reader[e]#τ, w] => Eff[Reader[e]#τ, w] =
+    def local[w, e]: (e => e) => Eff[Reader[e]#t0]#t0[w] => Eff[Reader[e]#t0]#t0[w] =
       env_xform => reader => {
-        ask >>= (env0 => {
+        ask[e] >>= (env0 => {
           val env = env_xform(env0)
-          def loop: ValueEffect[w, Reader[e]#τ] => Eff[Reader[e]#τ, w] = ve =>
+          def loop: ValueEffect[w, Reader[e]#t0] => Eff[Reader[e]#t0]#t0[w] = ve =>
             ve match {
-              case Value(x)  => Monad[Eff[Reader[e]#τ, ?]].pure(x)
+              case Value(x)  => Monad[Eff[Reader[e]#t0]#t0].pure(x)
               case Effect(k) => loop(k.x(env))
             }
           loop(admin(reader))
