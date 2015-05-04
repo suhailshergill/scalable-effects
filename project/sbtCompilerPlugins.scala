@@ -5,6 +5,8 @@ object sbtCompilerPlugins {
     lazy val settings = Seq(
       Keys.resolvers += "bintray/non" at "http://dl.bintray.com/non/maven"
       , addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.5.2")
+      , addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0-M5" cross
+                          CrossVersion.full)
     )
   }
 
