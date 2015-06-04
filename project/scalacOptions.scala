@@ -14,6 +14,7 @@ object scalacOptions {
                           , "-Ywarn-dead-code"
                           , "-Ywarn-numeric-widen"
                           , "-Ywarn-value-discard"
+                          , "-Xfuture"
                         )
     // , scalacOptions in Compile ++= Seq("-Xprint-types", "-Xprint:typer")
     )
